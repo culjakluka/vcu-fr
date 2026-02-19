@@ -1,5 +1,3 @@
-#include <SPI.h>
-#include <mcp2515.h>
 #include "node.h"
 
 MCP2515 mcp2515(10); // CS pin 10
@@ -9,28 +7,31 @@ struct can_frame canRx;
 
 int timerReceiver;
 int timerTransmitter;
+bool plausibilityState;
 
 //receiver podatci
-uint8_t bmsState;
+NodeState bmsState;
 uint16_t powerLimit;
 
 //transmitter podatci
-uint8_t vcuState;
+NodeState vcuState;
 uint16_t plausibleRequest;
-uint8_t mapMode;
+Mode mapMode;
 uint16_t powerRequest;
 
 //led pinovi
-int led1 = 3;
-int led2 = 5;
+int ledMappingMode = 3;
+int ledPowerRequest = 5;
 
 //btn pinovi
-int btn1 = 7;
-int btn2 = 8;
+int btnMappingMode = 7;
+int btnVCUState = 8;
 
-//pot
+//pot vrijednosti
 int pot1;
 int pot2;
+
+
 
 
 /*
@@ -38,8 +39,12 @@ ideja iza ovoga je bila da se nekad podaci salju/primaju
 u vecem broju byteova nego sta jedan element data niza moze primit
 npr. imamo 2 bytea za definirat power output ali moramo poslat ka 1 byte + 1 byte
 */
-//uint16_t decodeBytes(uint8_t firstByte, uint8_t secondByte);
-//void encryptBytes(uint16_t value, uint8_t &firstByte, uint8_t &secondByte);
+uint16_t decodeBytes(uint8_t firstByte, uint8_t secondByte);
+void encryptBytes(uint16_t value, uint8_t &firstByte, uint8_t &secondByte);
+
+
+
+
 
 void setup() {
   // basic setup
@@ -47,28 +52,27 @@ void setup() {
   SPI.begin();
   mcp2515.reset();
   mcp2515.setBitrate(CAN_500KBPS, MCP_16MHZ);
-  //ovo je mod za testiranje, inace je setNormalMode()
+  //ovo je mod za testiranje, inace je setNormalMode() u komunikaciji
   mcp2515.setLoopbackMode();
   Serial.println("sve ok");
 
   // specifikacije iz zad
   //ID TX i RX poruka
-  canTx.can_id = 0x100;
-  canRx.can_id = 0x200;
+  canTx.can_id = CAN_TX;
+  canRx.can_id = CAN_RX;
 
-  //duljina data u bajtovima
+  //duljina data unutar okvira sta se salje, u bajtovima (svako polje je 1 bajt)
   canTx.can_dlc = 6;
   canRx.can_dlc = 3;
 
   timerReceiver = 0;
   timerTransmitter = 0;
 
-  pinMode(led1, OUTPUT);
-  pinMode(led2, OUTPUT);
+  pinMode(ledMappingMode, OUTPUT);
+  pinMode(ledPowerRequest, OUTPUT);
 
-  pinMode(btn1, INPUT_PULLUP);
-  pinMode(btn2, INPUT_PULLUP);
-
+  pinMode(btnMappingMode, INPUT_PULLUP);
+  pinMode(btnVCUState, INPUT_PULLUP);
 
 }
 
@@ -77,22 +81,18 @@ void loop() {
   pot1 = analogRead(A0);
   pot2 = analogRead(A1);
 
-  Serial.println(pot1);
-  Serial.println(pot2);
-
-
   //frekvencija RX je 10Hz
   if(millis() - timerReceiver > 100){
 
     timerReceiver = millis();
 
     if (mcp2515.readMessage(&canRx) == MCP2515::ERROR_OK) {
-        //poruka primljen
+        //poruka primljena
         bmsState = canRx.data[0];
-        //powerLimit = decodeBytes(canRx.data[1], canRx.data[2]);
+        powerLimit = decodeBytes(canRx.data[1], canRx.data[2]);
     }
     else{
-      //poruka nije primljena
+      //poruka nije primljena, moze se racunat ka ERROR state od BMS-a
     }
   }
 
@@ -104,9 +104,9 @@ void loop() {
     canTx.data[0] = vcuState;
 
 
-    //encryptBytes(plausibleRequest, canTx.data[1], canTx.data[2]);
+    encryptBytes(plausibleRequest, canTx.data[1], canTx.data[2]);
     canTx.data[3] = mapMode;
-    //encryptBytes(powerRequest, canTx.data[4], canTx.data[5]);
+    encryptBytes(powerRequest, canTx.data[4], canTx.data[5]);
     auto err = mcp2515.sendMessage(&canTx);
 
     if(err == MCP2515::ERROR_OK){
@@ -116,12 +116,26 @@ void loop() {
       //poruka nije poslana
     }
   }
-  delay(500);
 
 }
 
+//ove funkcije nisu testirane jos
+uint16_t decodeBytes(uint8_t firstByte, uint8_t secondByte){
+  /*
+  ako je 
+  firstbyte = 1001101
+  secondbyte = 00101001
+  onda drugi bajt shifta za 8 bitova ulijevo --> 0010100100000000
+  i rezultat spoji sa prvim bajtom --> 001010011001101      
+  */
+  return ((uint16_t)secondByte << 8) | firstByte;
+}
 
-
+void encryptBytes(uint16_t value, uint8_t &firstByte, uint8_t &secondByte){
+  firstByte = value & 255;
+  secondByte = (value >> 8) & 255;
+  return ;
+}
 
 
 

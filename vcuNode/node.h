@@ -34,10 +34,10 @@ enum ID {
 
 //deklaracije za mappingMode feature
 
-
-
-
-
+void initMapping(int ledPin, int btnPin);
+void updateMapping();
+void updateLED();
+uint16_t applyMapping(uint16_t plausibleRequest);
 
 
 

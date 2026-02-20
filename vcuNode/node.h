@@ -25,10 +25,9 @@ enum ID {
 
 //deklaracije za stateMachine feature
 
-
-
-
-
+bool VcuBtnDebounce(int btn);
+void VcuChangeState(NodeState bms, bool plausible, NodeState &vcu);
+void VcuManageState(NodeState vcu, uint16_t &powerReq, uint16_t plausibileReq);
 
 
 

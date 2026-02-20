@@ -32,8 +32,6 @@ int pot1;
 int pot2;
 
 
-
-
 /*
 ideja iza ovoga je bila da se nekad podaci salju/primaju 
 u vecem broju byteova nego sta jedan element data niza moze primit
@@ -93,7 +91,12 @@ void loop() {
     }
     else{
       //poruka nije primljena, moze se racunat ka ERROR state od BMS-a
+      bmsState = ERROR;
     }
+  }
+
+  if(VcuBtnDebounce(btnVCUState)){
+    VcuChangeState(bmsState, plausibilityState, vcuState);
   }
 
   //frekvencija TX je 20Hz

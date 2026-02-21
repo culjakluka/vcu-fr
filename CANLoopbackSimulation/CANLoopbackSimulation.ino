@@ -1,4 +1,22 @@
-#include "node.h"
+#include <SPI.h>
+#include <mcp2515.h>
+
+enum NodeState: uint8_t {
+  IDLE,
+  READY,
+  ERROR
+};
+
+enum Mode: uint8_t {
+  ECO,
+  NORMAL,
+  SPORT
+};
+
+enum ID {
+  CAN_RX = 0x100,
+  CAN_TX = 0x200
+};
 
 
 
@@ -203,8 +221,6 @@ void simulateBmsNode(){
     auto err = mcp2515.sendMessage(&bmsMsg);
   }
 }
-
-
 
 
 

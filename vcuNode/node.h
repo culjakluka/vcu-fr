@@ -4,6 +4,7 @@
 
 //deklaracije funkcija i drugih stvari
 
+
 //isti su stateovi za VCU i BMS node
 enum NodeState: uint8_t {
   IDLE,

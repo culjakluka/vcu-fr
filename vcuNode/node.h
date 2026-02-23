@@ -1,3 +1,4 @@
+#pragma once // kako bi se sprijecio dupli include
 #include <SPI.h>
 #include <mcp2515.h>
 #include <Arduino.h>
@@ -51,8 +52,9 @@ enum ID {
 
 
 //deklaracije za powerLimiter feature
-
-
+uint16_t pct10_to_powerW(uint16_t pct10);
+uint16_t applyPowerLimit(uint16_t requestedPowerW, uint16_t powerLimitW);
+uint8_t powerW_to_pwm(uint16_t powerW);
 
 
 

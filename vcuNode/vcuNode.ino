@@ -81,6 +81,8 @@ void loop() {
   pot1 = analogRead(A0);
   pot2 = analogRead(A1);
 
+  pedalValue(pot1, pot2, plausibleRequest, plausibilityState);
+
   //frekvencija RX je 10Hz
   if(millis() - timerReceiver > 100){
 

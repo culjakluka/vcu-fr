@@ -43,7 +43,7 @@ uint16_t applyMapping(uint16_t plausibleRequest);
 
 
 //deklaracije za plausibility feature
-
+void pedalValue(int pot1, int pot2, int plausibleRequest, bool isPlausible);
 
 
 

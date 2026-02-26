@@ -1,5 +1,7 @@
 #include "node.h"
 
+
+
 MCP2515 mcp2515(10); // CS pin 10
 
 struct can_frame canTx;
@@ -30,6 +32,7 @@ int btnVCUState = 8;
 // pot vrijednosti
 int pot1;
 int pot2;
+
 
 /*
 ideja iza ovoga je bila da se nekad podaci salju/primaju
@@ -173,7 +176,7 @@ void loop() {
 uint16_t decodeBytes(uint8_t firstByte, uint8_t secondByte){
   /*
   ako je 
-  firstbyte = 1001101
+  firstbyte = 10011010
   secondbyte = 00101001
   onda drugi bajt shifta za 8 bitova ulijevo --> 0010100100000000
   i rezultat spoji sa prvim bajtom --> 001010011001101      

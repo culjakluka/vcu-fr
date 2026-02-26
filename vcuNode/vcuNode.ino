@@ -83,8 +83,6 @@ void loop() {
   pot1 = analogRead(A0);
   pot2 = analogRead(A1);
 
-  simulateBmsNode();
-
   //frekvencija RX je 10Hz
   if(millis() - timerReceiver > 500){
 
@@ -151,65 +149,5 @@ void encryptBytes(uint16_t value, uint8_t &firstByte, uint8_t &secondByte){
   secondByte = (value >> 8) & 255;
   return ;
 }
-
-
-
-void simulateBmsNode(){
-
-  struct can_frame bmsMsg;
-
-  bmsMsg.can_id = CAN_RX;
-  bmsMsg.can_dlc = 3;
-
-  static int timerSendBms = 0;
-  uint16_t powerLimit = 30000;
-  NodeState bmsState = READY;
-  static int timerChangeBmsState = 0;
-  int changePeriod = 3000;
-  int chooseState = 1;
-
-  if(millis() - timerChangeBmsState > changePeriod){
-
-    changePeriod = random(1000, 7000);
-    timerChangeBmsState = millis();
-    chooseState = random(0, 3);
-
-    switch(chooseState){
-      case 0:
-        bmsState = IDLE;
-        break;
-      case 1:
-        bmsState = READY;
-        break;
-      default:
-        bmsState = ERROR;
-        break;
-    }
-  }
-
-  if(millis() - timerSendBms > 500){
-
-    timerSendBms = millis();
-
-    powerLimit = random(30000, 65500);
-    bmsMsg.data[0] = bmsState;
-    encryptBytes(powerLimit, bmsMsg.data[1], bmsMsg.data[2]);
-
-    Serial.print("sent power limit: ");
-    Serial.print(powerLimit);
-    Serial.print(" sent bms state: ");
-    Serial.println(bmsState);
-
-    auto err = mcp2515.sendMessage(&bmsMsg);
-  }
-}
-
-
-
-
-
-
-
-
 
 

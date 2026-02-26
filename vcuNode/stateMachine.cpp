@@ -7,7 +7,9 @@ void VcuManageState(NodeState vcu, uint16_t &powerReq, uint16_t plausibleReq){
   }
 
   else{
-    //nekuzin sta znaci da passa na plausibility checker
+    //pass to plausibility checker
+    //if plausible pass plausible req to mapped req
+    //use powerLimiter on mapped req to get final req
   }
 
 }
@@ -37,11 +39,11 @@ void VcuChangeState(NodeState bms, bool plausible, NodeState &vcu){
 
 bool VcuBtnDebounce(int btn){
 
-  static int btnState = HIGH;
-  static int lastState = HIGH;
+  static bool btnState = HIGH;
+  static bool lastState = HIGH;
   static int debounceTimer = 0;
 
-  int currState = digitalRead(btn);
+  bool currState = digitalRead(btn);
 
   if(currState != lastState){
     debounceTimer = millis();
@@ -60,7 +62,7 @@ bool VcuBtnDebounce(int btn){
     }
   }
 
-  lastState = btnState;
+  lastState = currState;
 
   return false;
 }

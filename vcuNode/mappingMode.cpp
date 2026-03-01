@@ -1,36 +1,35 @@
 #include "node.h"
 #include <math.h>
 
-static Mode currentMode;
-static bool buttonState;
-static int led, btn;
-
 //Funkcija za inicijalizaciju svih pinova i varijabli koje se koriste u ostalim funkcijama
-void initMapping(int ledPin, int btnPin){
+//ovo je vec napravljeno unutar setup()
+// void initMapping(int ledPin, int btnPin){
 
-  //Spremanje pinova u lokalne varijable        
-  led = ledPin;                                      
-  btn = btnPin;
+//   //Spremanje pinova u lokalne varijable        
+//   led = ledPin;                                      
+//   btn = btnPin;
 
-  //Postavljanje pinova
-  pinMode(led, OUTPUT);
-  pinMode(btn, INPUT_PULLUP);                        //PULLUP -> HIGH = NIJE PRITISNUTO, LOW = PRITISNUTO             
+//   //Postavljanje pinova
+//   pinMode(led, OUTPUT);
+//   pinMode(btn, INPUT_PULLUP);                        //PULLUP -> HIGH = NIJE PRITISNUTO, LOW = PRITISNUTO             
 
-  //Default mode
-  currentMode = NORMAL;
+//   //Default mode
+//   currentMode = NORMAL;
 
-  //Citanje stanja gumba i spremanje u lokalnu varijablu                    
-  buttonState = digitalRead(btn);
+//   //Citanje stanja gumba i spremanje u lokalnu varijablu                    
+//   buttonState = digitalRead(btn);
 
- //Postavljanje LED diode u pocetno stanje
-  updateLED();                                      
-}
+//  //Postavljanje LED diode u pocetno stanje
+//   updateLED();                                      
+// }
 
 //Funkcija mijenja mapu na pritisak gumba i poziva funkciju za updateanje LED diode
-void updateMapping(){
+void updateMapping(int btn, Mode &currentMode, int led){
+  static bool buttonState = HIGH;
   //Citanje stanja gumba nakon cega se usporeduje sa zadnjim citanjem gumba                             
-  bool currentState = digitalRead(btn);              
-  if(buttonState == HIGH && currentState == LOW){ 
+  bool currentState = digitalRead(btn);    
+
+  if((buttonState == HIGH) && (currentState == LOW)){ 
     switch(currentMode){
       case ECO:
         currentMode = NORMAL;
@@ -42,19 +41,20 @@ void updateMapping(){
         currentMode = ECO;
         break;
     }
-    updateLED();
+    updateLED(currentMode, led);
+    
   }
   buttonState = currentState;
 }
 
 //Funkcija mijenja stanje LED diode ovisno o trenutnoj mapi
-void updateLED(){
+void updateLED(Mode currentMode, int led){
   switch(currentMode){
     case ECO:
-      analogWrite(led, 80);
+      analogWrite(led, 0);
       break;
     case NORMAL:
-      analogWrite(led, 160);
+      analogWrite(led, 100);
       break;
     case SPORT:
       analogWrite(led, 255);
@@ -62,8 +62,9 @@ void updateLED(){
   }
 }
 
+
 //Funkcija za primjenjivaje mapa
-uint16_t applyMapping(uint16_t plausibleRequest){
+uint16_t applyMapping(uint16_t plausibleRequest, Mode currentMode){
   if(plausibleRequest == 0){
     return 0;
   }
@@ -74,13 +75,14 @@ uint16_t applyMapping(uint16_t plausibleRequest){
 
   switch(currentMode){
     case ECO:
-      mapped = log(norm);
+      mapped = log(norm + 1) / log(2);
       break;
     case NORMAL:
       mapped = norm;
       break;
     case SPORT:
-      mapped = pow(norm, 2);
+      //mapped = pow(norm, 2);
+      mapped = (exp(norm) - 1) / (M_E - 1);
       break;
   }
 
@@ -88,3 +90,6 @@ uint16_t applyMapping(uint16_t plausibleRequest){
 
   return mappedRequest;
 }
+
+
+

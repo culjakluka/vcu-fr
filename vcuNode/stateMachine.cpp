@@ -1,21 +1,24 @@
 #include "node.h"
 
-void VcuManageState(NodeState vcu, uint16_t &powerReq, uint16_t plausibleReq){
+void VcuManageState(NodeState vcu, int pot1, int pot2, uint16_t &plausibleReq, uint16_t &powerReq, Mode mappingMode){
 
   if((vcu == ERROR) || (vcu == IDLE)){
     powerReq = 0;
+    plausibleReq = 0;
   }
 
   else{
     //pass to plausibility checker
     //if plausible pass plausible req to mapped req
     //use powerLimiter on mapped req to get final req
+    plausibleReq = getPlausibleReq(pot1, pot2);
+    powerReq = applyPowerLimit(pct10_to_powerW(applyMapping(plausibleReq, mappingMode)));
   }
 
 }
 
 
-void VcuChangeState(NodeState bms, bool plausible, NodeState &vcu){
+NodeState VcuChangeState(NodeState bms, bool plausible, NodeState vcu){
 
   if(bms == READY){
 
@@ -34,9 +37,11 @@ void VcuChangeState(NodeState bms, bool plausible, NodeState &vcu){
     vcu = ERROR;
   }
 
+  return vcu;
+
 }
 
-
+//triba testirat ovo ...
 bool VcuBtnDebounce(int btn){
 
   static bool btnState = HIGH;
@@ -50,7 +55,7 @@ bool VcuBtnDebounce(int btn){
   }
 
   //pretpostavljan da je sve ispod 20ms samo sum, a ne zapravo stiskanje botuna
-  if((millis() - debounceTimer) > 20){
+  if((millis() - debounceTimer) > 10){
 
     if(currState != btnState){
 

@@ -1,22 +1,4 @@
-#include <SPI.h>
-#include <mcp2515.h>
-
-enum NodeState: uint8_t {
-  IDLE,
-  READY,
-  ERROR
-};
-
-enum Mode: uint8_t {
-  ECO,
-  NORMAL,
-  SPORT
-};
-
-enum ID {
-  CAN_RX = 0x100,
-  CAN_TX = 0x200
-};
+#include "node.h"
 
 
 
@@ -25,66 +7,90 @@ MCP2515 mcp2515(10); // CS pin 10
 struct can_frame canTx;
 struct can_frame canRx;
 
-int timerReceiver;
-int timerTransmitter;
+unsigned long timerReceiver;
+unsigned long timerTransmitter;
 bool plausibilityState;
 
-//receiver podatci
+// receiver podatci
 NodeState bmsState;
 uint16_t powerLimit;
 
-//transmitter podatci
+// transmitter podatci
 NodeState vcuState;
 uint16_t plausibleRequest;
 Mode mapMode;
 uint16_t powerRequest;
 
-//led pinovi
+// led pinovi
 int ledMappingMode = 3;
 int ledPowerRequest = 5;
 
-//btn pinovi
+// btn pinovi
 int btnMappingMode = 7;
 int btnVCUState = 8;
 
-//pot vrijednosti
+// pot vrijednosti
 int pot1;
 int pot2;
 
 
 /*
-ideja iza ovoga je bila da se nekad podaci salju/primaju 
+ideja iza ovoga je bila da se nekad podaci salju/primaju
 u vecem broju byteova nego sta jedan element data niza moze primit
 npr. imamo 2 bytea za definirat power output ali moramo poslat ka 1 byte + 1 byte
 */
 uint16_t decodeBytes(uint8_t firstByte, uint8_t secondByte);
 void encryptBytes(uint16_t value, uint8_t &firstByte, uint8_t &secondByte);
 
+// 0 = bez debug ispisa, 1 = ukljuci debug
+#define DEBUG_POWER_LIMITER 0
 
-void simulateBmsNode();
+// Optional: BMS timeout fail-safe 
+// 0=off, 1=on (ukljuciti kad bude sve implementirano(sve znajcajke) i kad zelis fail-safe ponasanje)
+// Uveli smo BMS timeout fail-safe da, ako BMS prestane slati poruke ili limit ne stigne na vrijeme 
+// (npr. pri startu ili prekidu CAN veze), sustav automatski prijede u sigurno stanje tako da postavi 
+// powerLimit = 0 i time sprijeci bilo kakav nenamjerni/nesigurni zahtjev za snagom.
+// #define ENABLE_BMS_TIMEOUT_FAILSAFE 0
+// static const unsigned long BMS_TIMEOUT_MS = 300; // > 10Hz period (100ms)
+unsigned long lastBmsRxMs = 0;
+
+int timerTesting;
 
 
 void setup() {
-  // basic setup
   Serial.begin(9600);
   SPI.begin();
+
   mcp2515.reset();
   mcp2515.setBitrate(CAN_500KBPS, MCP_16MHZ);
+
   //ovo je mod za testiranje, inace je setNormalMode() u komunikaciji
   mcp2515.setLoopbackMode();
-  Serial.println("sve ok");
 
+  Serial.println("Sve ok");
+
+  
   // specifikacije iz zad
-  //ID TX i RX poruka
-  canTx.can_id = CAN_TX;
-  canRx.can_id = CAN_RX;
+  // ID TX i RX poruka
+  canTx.can_id = CAN_TX; // 0x200
+  canRx.can_id = CAN_RX; // 0x100 (koristi se kao expected ID)
 
-  //duljina data unutar okvira sta se salje, u bajtovima (svako polje je 1 bajt)
+ //duljina data unutar okvira sta se salje, u bajtovima (svako polje je 1 bajt)
   canTx.can_dlc = 6;
   canRx.can_dlc = 3;
 
   timerReceiver = 0;
   timerTransmitter = 0;
+
+  // init vrijednosti (da ne saljem smece)
+  vcuState = IDLE;
+  bmsState = IDLE;
+  plausibleRequest = 0;
+  mapMode = ECO;
+  powerRequest = 0;
+  powerLimit = 0;
+
+  lastBmsRxMs = 0;
 
   pinMode(ledMappingMode, OUTPUT);
   pinMode(ledPowerRequest, OUTPUT);
@@ -92,8 +98,11 @@ void setup() {
   pinMode(btnMappingMode, INPUT_PULLUP);
   pinMode(btnVCUState, INPUT_PULLUP);
 
-  randomSeed(analogRead(0));
+  updateLED(mapMode, ledMappingMode);
 
+  randomSeed(analogRead(3));
+
+  timerTesting = 0;
 }
 
 void loop() {
@@ -103,65 +112,48 @@ void loop() {
 
   simulateBmsNode();
 
-  //frekvencija RX je 10Hz
-  if(millis() - timerReceiver > 500){
+  // FEATURE 1: CAN_RX (10 Hz): citaj BMS poruku 0x100
 
+  if (millis() - timerReceiver > 100) {
     timerReceiver = millis();
 
     if (mcp2515.readMessage(&canRx) == MCP2515::ERROR_OK) {
-        //poruka primljena
-        bmsState = canRx.data[0];
+      // filtriraj: prihvati samo CAN_RX (0x100)
+      if ((canRx.can_id == CAN_RX) & (canRx.can_dlc == 3)) {
+        bmsState = (NodeState)canRx.data[0];
         powerLimit = decodeBytes(canRx.data[1], canRx.data[2]);
-
-        Serial.print("received power limit: ");
-        Serial.print(powerLimit);
-        Serial.print(" received bms state: ");
-        Serial.println(bmsState);
-
-    }
-    else{
-      //poruka nije primljena, moze se racunat ka ERROR state od BMS-a
-      bmsState = ERROR;
+        //lastBmsRxMs = millis(); // <-- biljezi kada je zadnji put dosao svjezi limit
+      }
     }
   }
 
-  // if(VcuBtnDebounce(btnVCUState)){
-  //   VcuChangeState(bmsState, plausibilityState, vcuState);
-  // }
+  updateMapping(btnMappingMode, mapMode, ledMappingMode);
 
-  //frekvencija TX je 20Hz
-  // if(millis() - timerTransmitter > 50){
+  if(VcuBtnDebounce(btnVCUState)){
+    vcuState = VcuChangeState(bmsState, checkPlausible(pot1, pot2), vcuState);
+  }
 
-  //   timerTransmitter = millis();
+  VcuManageState(vcuState, pot1, pot2, plausibleRequest, powerRequest, mapMode);
 
-  //   canTx.data[0] = vcuState;
-
-
-  //   encryptBytes(plausibleRequest, canTx.data[1], canTx.data[2]);
-  //   canTx.data[3] = mapMode;
-  //   encryptBytes(powerRequest, canTx.data[4], canTx.data[5]);
-  //   auto err = mcp2515.sendMessage(&canTx);
-
-  //   if(err == MCP2515::ERROR_OK){
-  //     //poruka poslana
-  //   }
-  //   else{
-  //     //poruka nije poslana
-  //   }
-  // }
-
+  if(millis() - timerTesting > 1000){
+    timerTesting = millis();
+    Serial.print("Plausible difference: ");
+    Serial.println(checkPlausible(pot1, pot2));
+    Serial.print("plausible request: ");
+    Serial.println(getPlausibleReq(pot1, pot2));
+    Serial.print("vcu node state: ");
+    Serial.println(vcuState);
+    Serial.print("bms node state: ");
+    Serial.println(bmsState);
+    Serial.print("power request: ");
+    Serial.println(powerRequest);
+  }
+  
 }
 
-//ove funkcije nisu testirane jos
+
 uint16_t decodeBytes(uint8_t firstByte, uint8_t secondByte){
-  /*
-  ako je 
-  firstbyte = 10011010
-  secondbyte = 00101001
-  onda drugi bajt shifta za 8 bitova ulijevo --> 0010100100000000
-  i rezultat spoji sa prvim bajtom --> 001010011001101      
-  */
-  return ((uint16_t)secondByte << 8) | firstByte;
+  return (uint16_t)(secondByte << 8) | firstByte;
 }
 
 void encryptBytes(uint16_t value, uint8_t &firstByte, uint8_t &secondByte){
@@ -169,7 +161,6 @@ void encryptBytes(uint16_t value, uint8_t &firstByte, uint8_t &secondByte){
   secondByte = (value >> 8) & 255;
   return ;
 }
-
 
 
 void simulateBmsNode(){
@@ -205,7 +196,7 @@ void simulateBmsNode(){
     }
   }
 
-  if(millis() - timerSendBms > 500){
+  if(millis() - timerSendBms > 100){
 
     timerSendBms = millis();
 
@@ -213,19 +204,13 @@ void simulateBmsNode(){
     bmsMsg.data[0] = bmsState;
     encryptBytes(powerLimit, bmsMsg.data[1], bmsMsg.data[2]);
 
-    Serial.print("sent power limit: ");
-    Serial.print(powerLimit);
-    Serial.print(" sent bms state: ");
-    Serial.println(bmsState);
+    // Serial.print("sent power limit: ");
+    // Serial.print(powerLimit);
+    // Serial.print(" sent bms state: ");
+    // Serial.println(chooseState);
 
     auto err = mcp2515.sendMessage(&bmsMsg);
   }
 }
-
-
-
-
-
-
 
 

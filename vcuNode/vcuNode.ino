@@ -44,7 +44,7 @@ void setup() {
   mcp2515.setBitrate(CAN_500KBPS, MCP_16MHZ);
 
   //ovo je mod za testiranje, inace je setNormalMode() u komunikaciji
-  mcp2515.setLoopbackMode();
+  mcp2515.setNormalMode();
 
   Serial.println("Sve ok");
 
@@ -60,7 +60,6 @@ void setup() {
   timerReceiver = 0;
   timerTransmitter = 0;
 
-  // init vrijednosti (da ne saljem smece)
   vcuState = IDLE;
   bmsState = IDLE;
   plausibleRequest = 0;
@@ -102,6 +101,8 @@ void loop() {
   }
 
   VcuManageState(vcuState, pot1, pot2, plausibleRequest, powerRequest, mapMode);
+
+  analogWrite(ledPowerRequest, powerW_to_pwm(powerRequest));
 
   if(millis() - timerTransmitter > 50){
     timerTransmitter = millis();

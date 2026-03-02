@@ -46,7 +46,7 @@ bool VcuBtnDebounce(int btn){
 
   static bool btnState = HIGH;
   static bool lastState = HIGH;
-  static int debounceTimer = 0;
+  static unsigned long debounceTimer = 0;
 
   bool currState = digitalRead(btn);
 

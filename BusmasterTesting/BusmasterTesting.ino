@@ -1,5 +1,28 @@
-#include "node.h"
+#pragma once // kako bi se sprijecio dupli include
+#include <SPI.h>
+#include <mcp2515.h>
+#include <Arduino.h>
 
+#define CAN_ID_MASK 0x7FF
+
+
+//isti su stateovi za VCU i BMS node
+enum NodeState: uint8_t {
+  IDLE,
+  READY,
+  ERROR
+};
+
+enum Mode: uint8_t {
+  ECO,
+  NORMAL,
+  SPORT
+};
+
+enum ID {
+  CAN_RX = 0x100,
+  CAN_TX = 0x200
+};
 
 
 MCP2515 mcp2515(10); // CS pin 10
@@ -33,6 +56,8 @@ int btnVCUState = 8;
 int pot1;
 int pot2;
 
+unsigned long timerTesting;
+
 uint16_t decodeBytes(uint8_t firstByte, uint8_t secondByte);
 void encryptBytes(uint16_t value, uint8_t &firstByte, uint8_t &secondByte);
 
@@ -47,15 +72,6 @@ void setup() {
   mcp2515.setNormalMode();
 
   Serial.println("Sve ok");
-
-  
-  // ID TX i RX poruka
-  canTx.can_id = CAN_TX;
-  canRx.can_id = CAN_RX;
-
-  //duljina data unutar okvira sta se salje, u bajtovima (svako polje je 1 bajt)
-  canTx.can_dlc = 6;
-  canRx.can_dlc = 3;
 
   timerReceiver = 0;
   timerTransmitter = 0;
@@ -73,7 +89,8 @@ void setup() {
   pinMode(btnMappingMode, INPUT_PULLUP);
   pinMode(btnVCUState, INPUT_PULLUP);
 
-  updateLED(mapMode, ledMappingMode);
+
+  timerTesting = 0;
 }
 
 void loop() {
@@ -81,34 +98,26 @@ void loop() {
   pot1 = analogRead(A0);
   pot2 = analogRead(A1);
 
-  pedalValue(pot1, pot2, plausibleRequest, plausibilityState);
-
-
-  while(mcp2515.readMessage(&canRx) == MCP2515::ERROR_OK) {
+  //100ms jer je frekvencija 10Hz
+  // if (millis() - timerReceiver > 100) {
+  //   timerReceiver = millis();
+  auto msg = mcp2515.readMessage(&canRx);
+  if(msg == MCP2515::ERROR_OK) {
+    Serial.println("uslo");
     // filtriraj: prihvati samo CAN_RX (0x100)
-    if ((canRx.can_id == CAN_RX)) {
+    if (((canRx.can_id) == CAN_RX) & (canRx.can_dlc == 3)) {
       bmsState = (NodeState)canRx.data[0];
-      powerLimit = decodeBytes(canRx.data[3], canRx.data[4]);
+      powerLimit = decodeBytes(canRx.data[1], canRx.data[2]);
     }
   }
+  // }
 
-  updateMapping(btnMappingMode, mapMode, ledMappingMode);
-
-  if(VcuBtnDebounce(btnVCUState)){
-    vcuState = VcuChangeState(bmsState, checkPlausible(pot1, pot2), vcuState);
-  }
-
-  VcuManageState(vcuState, pot1, pot2, plausibleRequest, powerRequest, mapMode);
-
-  analogWrite(ledPowerRequest, powerW_to_pwm(powerRequest));
-
-  if(millis() - timerTransmitter > 50){
-    timerTransmitter = millis();
-    canTx.data[0] = vcuState;
-    encryptBytes(plausibleRequest, canTx.data[1], canTx.data[2]);
-    canTx.data[3] = mapMode;
-    encryptBytes(powerRequest, canTx.data[4], canTx.data[5]);
-    auto msg = mcp2515.sendMessage(&canTx);
+  if(millis() - timerTesting > 1000){
+    timerTesting = millis();
+    Serial.print("BMS state:");
+    Serial.println(bmsState);
+    Serial.print("power limit: ");
+    Serial.println(powerLimit);
   }
 
 }

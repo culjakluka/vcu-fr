@@ -81,12 +81,14 @@ void loop() {
   pot1 = analogRead(A0);
   pot2 = analogRead(A1);
 
+  pedalValue(pot1, pot2, plausibleRequest, plausibilityState);
+
 
   while(mcp2515.readMessage(&canRx) == MCP2515::ERROR_OK) {
     // filtriraj: prihvati samo CAN_RX (0x100)
-    if ((canRx.can_id == CAN_RX) & (canRx.can_dlc == 3)) {
+    if ((canRx.can_id == CAN_RX)) {
       bmsState = (NodeState)canRx.data[0];
-      powerLimit = decodeBytes(canRx.data[1], canRx.data[2]);
+      powerLimit = decodeBytes(canRx.data[3], canRx.data[4]);
     }
   }
 
